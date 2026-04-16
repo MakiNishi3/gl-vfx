@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Shader Playground</title>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<style>
+body{margin:0;display:flex;height:100vh;background:#fff;color:#ffff00;font-family:Arial}
+#ui{width:320px;padding:10px;box-sizing:border-box;background:#1b1b1b;display:flex;flex-direction:column;gap:10px}
+#canvas{flex:1;display:block}
+textarea{width:100%;height:200px;background:#000;color:#0f0;border:1px solid #333}
+button{padding:8px;background:#333;color:#fff;border:0;cursor:pointer}
+input{color:#fff}
+</style>
+</head>
+<body>
+<div id="ui">
+<input type="file" id="file">
+<button id="load">Load Shader</button>
+<button id="toggle">Pause</button>
+<button id="reset">Reset</button>
+<textarea id="frag"></textarea>
+</div>
+<canvas id="canvas"></canvas>
+
+<script type="module">
+import createShader from "https://cdn.jsdelivr.net/npm/gl-shader@4.3.1/index.js"
+
+const canvas = document.getElementById("canvas")
+const gl = canvas.getContext("webgl")
+let running = true
+let shader
+let start = performance.now()
+
+const vert = `
+attribute vec2 position;
+void main(){
+gl_Position=vec4(position,0.0,1.0);
+}
+`
+
+function resize(){
+canvas.width = window.innerWidth - 320
+canvas.height = window.innerHeight
+gl.viewport(0,0,canvas.width,canvas.height)
+}
+
+window.addEventListener("resize",resize)
+resize()
+
+const buffer = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER,buffer)
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW)
+
+function compile(frag){
+shader = createShader(gl,vert,frag)
+}
+
+function draw(){
+if(!running)return
+const t = (performance.now()-start)/1000
+gl.clearColor(0,0,0,1)
+gl.clear(gl.COLOR_BUFFER_BIT)
+shader.bind()
+shader.uniforms.time = t
+shader.uniforms.resolution = [canvas.width,canvas.height]
+const loc = gl.getAttribLocation(shader.program,"position")
+gl.enableVertexAttribArray(loc)
+gl.bindBuffer(gl.ARRAY_BUFFER,buffer)
+gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0)
+gl.drawArrays(gl.TRIANGLE_STRIP,0,4)
+requestAnimationFrame(draw)
+}
+
+$("#toggle").on("click",function(){
+running=!running
+if(running)draw()
+$(this).text(running?"Pause":"Play")
+})
+
+$("#reset").on("click",function(){
+start=performance.now()
+})
+
+$("#file").on("change",function(e){
+const r=new FileReader()
+r.onload=function(){
+$("#frag").val(r.result)
+compile(r.result)
+}
+r.readAsText(e.target.files[0])
+})
+
+$("#load").on("click",function(){
+compile($("#frag").val())
+})
+
+const defaultFrag = `
+precision mediump float;
+uniform float time;
+uniform vec2 resolution;
+void main(){
+vec2 uv=gl_FragCoord.xy/resolution.xy;
+vec3 col=0.5+0.5*cos(time+uv.xyx+vec3(0,2,4));
+gl_FragColor=vec4(col,1.0);
+}
+`
+
+$("#frag").val(defaultFrag)
+compile(defaultFrag)
+draw()
+</script>
+</body>
+</html>
